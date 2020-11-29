@@ -21,13 +21,25 @@ const int mx[5][5] = {{1,2,1},{0,0,0},{-1,-2,-1}};
 const int my[5][5] = {{-1,0,1},{-2,0,2},{-1,0,1}};
 */
 
-int getFileSize(ifstream & input_stream);
+auto start_load = chrono::steady_clock::now();
+auto end_load = chrono::steady_clock::now();
+auto start_store = chrono::steady_clock::now();
+auto end_store = chrono::steady_clock::now();
+auto start_gauss = chrono::steady_clock::now();
+auto end_gauss = chrono::steady_clock::now();
+auto start_sobel = chrono::steady_clock::now();
+auto end_sobel = chrono::steady_clock::now();
+auto end_total = chrono::steady_clock::now();
+
+bool store(char *file_buffer, int file_size_int, ofstream& output_stream);
+
+int gauss();
+
+int sobel();
+
+void printTime(string operation, string inpath);
 
 int main(int argc, char *argv[]){
-
-	friend int getFileSize(ifstream& input_stream);
-
-	auto start = chrono::steady_clock::now();
 
 	if(argc != 4){
 		cout << "Wrong format: \n image-seq operation in_path out_path \n operation: copy, gauss, sobel \n";
@@ -42,7 +54,6 @@ int main(int argc, char *argv[]){
 		cout << "Unexpected operation: " << argv[1] << "\n image-seq operation in_path out_path \n operation: copy, gauss, sobel \n";
 		return 0;
 	}
-
 
 	const char *ind = indir.c_str();
 	DIR *idir = opendir(ind);
@@ -63,61 +74,102 @@ int main(int argc, char *argv[]){
 		return 0;
 	}
 
-	auto img1 = chrono::steady_clock::now();
-	cout << "Time in microseconds : " << chrono::duration_cast<chrono::microseconds>(img1 - start).count() << " microseconds \n";
+
 
 
 /*Opening directory and checking bmp files*/
 struct dirent *file;
 while((file = readdir(idir)) != NULL){
+		start_load = chrono::steady_clock::now();
+
+
 		string inpath = indir+"/"+file->d_name;
 		string outpath = outdir+"/"+file->d_name;
 
-		ifstream input_stream( inpath, ios::binary );
-  	ofstream output_stream( outpath, ios::binary );
-		int file_size = getFileSize(&input_stream);
-		char *file_buffer = new char[file_size]; //Cambiar
+		ifstream input_stream(inpath, ios::binary);
 
-		if (input_stream.is_open() && output_stream.is_open())
+		if (input_stream.is_open() && inpath != indir+"/"+"." && inpath != indir+"/"+"..")
 		{
+				int file_size_int = filesystem::file_size(inpath);
+				//cout << file->d_name << " has a size of " << file_size_int << " ";
+				char *file_buffer = new char[file_size_int];
+
 				input_stream.seekg(0, ios::beg);
-				input_stream.getline(file_buffer, file_size); //Cambiar
+				int i = 0;
+				while (input_stream.get(file_buffer[i])){
+					i++;
+				}
+
+				end_load = chrono::steady_clock::now();
 
 				if (int(file_buffer[26]) == 1 && int(file_buffer[27]) == 0 && int(file_buffer[28]) == 24 && int(file_buffer[29]) == 0 && int(file_buffer[30]) == 0 &&
 				int(file_buffer[31]) == 0 && int(file_buffer[32]) == 0 && int(file_buffer[33]) == 0){
-					cout << "valid BMP file";
-					if(operation == "copy"){
+					//cout << "and is a valid BMP file \n";
 
+					if(operation == "copy"){
+						ofstream output_stream(outpath, ios::binary);
+						start_store = chrono::steady_clock::now();
+
+						if (output_stream.is_open()){
+							store(file_buffer, file_size_int, output_stream);
+						}
+
+						end_store = chrono::steady_clock::now();
+						output_stream.close();
 					}
 					if(operation == "gauss"){
+						ofstream output_stream(outpath, ios::binary);
+						if (output_stream.is_open()){
 
+
+							int first_byte = int((unsigned char)file_buffer[10] |  (unsigned char)file_buffer[11] |  (unsigned char)file_buffer[12] |(unsigned char)file_buffer[13]);
+							cout << first_byte;
+							file_buffer[first_byte] = char(0); //Blue
+							file_buffer[first_byte + 1] = char(0); //Green
+							file_buffer[first_byte + 2] = char(255); //Red
+							store(file_buffer, file_size_int, output_stream);
+						}
+						output_stream.close();
 					}
 					if(operation == "sobel"){
+						ofstream output_stream(outpath, ios::binary);
+						if (output_stream.is_open()){
 
+						}
+						output_stream.close();
 					}
+
+					end_total = chrono::steady_clock::now();
+					printTime(operation, inpath);
 				}
+				input_stream.close();
 		}
-
-		//output_stream.write(file_buffer, sizeof(file_buffer));
-
-		output_stream.close();
-		input_stream.close();
 	}
 	return 0;
 }
 
-int getFileSize(ifstream & input_stream){
-	input_stream.seekg(0, ios::end);
-	return input_stream.tellg();
+bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
+	if(output_stream.write(file_buffer, file_size_int)){
+		return true;
+	}
+	return false;
 }
 
+void printTime(string operation, string inpath){
+	cout << "File: " << inpath <<" (time: " << chrono::duration_cast<chrono::microseconds>(end_total - start_load).count() << ")\n  Load time: " <<
+	chrono::duration_cast<chrono::microseconds>(end_load - start_load).count() << "\n";
 
+	if(operation != "copy"){
+		cout << "  Gauss time: " << chrono::duration_cast<chrono::microseconds>(end_gauss - start_gauss).count() << "\n";
+		if(operation == "sobel"){
+			cout << "  Sobel time: " << chrono::duration_cast<chrono::microseconds>(end_sobel - start_sobel).count() << "\n";
+		}
+	}
+
+	cout << "  Store time: " << chrono::duration_cast<chrono::microseconds>(end_store - start_store).count() << "\n";
+}
 
 /*
-int copy (){
-
-}
-
 int gauss (){
 
 }
