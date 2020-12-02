@@ -10,13 +10,15 @@
 #include <iterator>
 #include <sstream>
 #include <cstring>
+#include <math.h>
 /*test*/
 using namespace std;
-/*
+
 //Variables for Gaussian Blur
 const int m[5][5] = {{1,4,7,4,1},{4,16,26,16,4},{7,26,41,26,7},{4,16,26,16,4},{1,4,7,4,1}};
 const int w = 273;
 //Variables for Sobel operator
+/*
 const int mx[5][5] = {{1,2,1},{0,0,0},{-1,-2,-1}};
 const int my[5][5] = {{-1,0,1},{-2,0,2},{-1,0,1}};
 */
@@ -122,8 +124,8 @@ while((file = readdir(idir)) != NULL){
 						if (output_stream.is_open()){
 
 							gauss(file_buffer, file_size_int);
-
 							store(file_buffer, file_size_int, output_stream);
+
 						}
 						output_stream.close();
 					}
@@ -152,36 +154,71 @@ bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
 }
 
 bool gauss (char *file_buffer, int file_size_int){
-	int first_byte = int((unsigned char)file_buffer[10] |  (unsigned char)file_buffer[11] |  (unsigned char)file_buffer[12] |(unsigned char)file_buffer[13]);
-	int width = int((unsigned char)file_buffer[18] |  (unsigned char)file_buffer[19] |  (unsigned char)file_buffer[20] |(unsigned char)file_buffer[21]);
-	int height = int((unsigned char)file_buffer[22] |  (unsigned char)file_buffer[23] |  (unsigned char)file_buffer[24] |(unsigned char)file_buffer[25]);
+	int first_byte = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
+	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
+	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 |(unsigned char)file_buffer[22]);
 
-	cout << width << " " << height << "\n";
+	cout << "width: " << width << " height: " << height << "\n";
 
-	file_buffer[first_byte] = char(0); //Blue
-	file_buffer[first_byte + 1] = char(0); //Green
-	file_buffer[first_byte + 2] = char(255); //Red
+
+
+	// file_buffer[first_byte] = char(0); //Blue
+	// file_buffer[first_byte + 1] = char(0); //Green
+	// file_buffer[first_byte + 2] = char(255); //Red
 
 	char * res = new char [file_size_int];
 
 	memcpy(res, file_buffer, file_size_int);
 
-	cout << int((unsigned char) res[first_byte + 2]) << " " << int((unsigned char) file_buffer[first_byte + 2]) << "\n";
+	cout << first_byte << "\n";
 
 
-	// int i = 0, j = 0;
+
+	for(int i = 0; i < height; i++){
+		for(int j = 0; j < width*3; j+=3){
+			//for(int p = 0; p <= 2; p++){
+				int x1 = 0, x2 = 0, x3 = 0;
+				for(int s = -2; s <= 2; s++){
+					for(int t = -2; t <= 2; t++){
+								 //if((i+s) >= 0 && (j+t*3) >= 0 /*&& (i+s) < height && (j+t*3) < width*3*/){
+										//cout << int((unsigned char) file_buffer[(i+s)*(width*3) + (j+t) + first_byte + p]);
+										//cout << "|" << int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte])) << "|";
+									 	x1 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte]));
+										x2 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte + 1]));
+										x3 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte + 2]));
+							 		//} else {
+										//x1 += 0, x2 += 0, x3 += 0;
+									//}
+					}
+				}
+				//res[i*width*3 + j + first_byte] = (unsigned char) 0;//x/w;
+				//res[i*width*3 + j + first_byte + 1] = (unsigned char) 0;//x/w;
+				//cout << x1/w;
+				res[i*width*3 + j + first_byte] = x1/w;
+				res[i*width*3 + j + first_byte + 1] = x2/w;
+				res[i*width*3 + j + first_byte + 2] = x3/w;
+			//}
+		}
+	}
+
+
+
+
+
+	int i = 0, j = 0;
 	// file_buffer[i*width*3 + j + first_byte];
 	// file_buffer[i*width*3 + j + first_byte + 1];
 	// file_buffer[i*width*3 + j + first_byte + 2]
 
 
 
-	// cout << "Blue: " << int(file_buffer[i*width*3 + j + first_byte]) << " Green: " << int(file_buffer[i*width*3 + j + first_byte + 1]) << " Red: " << int((unsigned char) file_buffer[i*width*3 + j + first_byte + 2]);
+	cout << "Blue: " << int(file_buffer[i*width*3 + j + first_byte]) << " Green: " << int(file_buffer[i*width*3 + j + first_byte + 1]) << " Red: " << int((unsigned char) file_buffer[i*width*3 + j + first_byte + 2]);
+	cout << "Blue: " << int((unsigned char) res[i*width*3 + j + first_byte]) << " Green: " << int((unsigned char) res[i*width*3 + j + first_byte + 1]) << " Red: " << int((unsigned char) res[i*width*3 + j + first_byte + 2]);
 	//
 	// cout << " " << int(i*width*3 + j + first_byte) << "  " << first_byte;
+	memcpy(file_buffer, res, file_size_int);
 
 	return true;
-
 }
 
 /*
