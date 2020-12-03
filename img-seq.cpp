@@ -7,10 +7,12 @@
 #include <chrono>
 #include <sys/types.h>
 /*test*/
+#include <stdlib.h>
 #include <iterator>
 #include <sstream>
 #include <cstring>
-#include <math.h>
+#include <cmath>
+//#include <math.h>
 /*test*/
 using namespace std;
 
@@ -18,10 +20,10 @@ using namespace std;
 const int m[5][5] = {{1,4,7,4,1},{4,16,26,16,4},{7,26,41,26,7},{4,16,26,16,4},{1,4,7,4,1}};
 const int w = 273;
 //Variables for Sobel operator
-/*
-const int mx[5][5] = {{1,2,1},{0,0,0},{-1,-2,-1}};
-const int my[5][5] = {{-1,0,1},{-2,0,2},{-1,0,1}};
-*/
+
+const int mx[3][3] = {{1,2,1},{0,0,0},{-1,-2,-1}};
+const int my[3][3] = {{-1,0,1},{-2,0,2},{-1,0,1}};
+const int wsobel = 8;
 
 auto start_load = chrono::steady_clock::now();
 auto end_load = chrono::steady_clock::now();
@@ -33,11 +35,12 @@ auto start_sobel = chrono::steady_clock::now();
 auto end_sobel = chrono::steady_clock::now();
 auto end_total = chrono::steady_clock::now();
 
+
 bool store(char *file_buffer, int file_size_int, ofstream& output_stream);
 
 bool gauss (char *file_buffer, int file_size_int);
 
-int sobel();
+bool sobel(char *file_buffer, int file_size_int);
 
 void printTime(string operation, string inpath);
 
@@ -93,7 +96,7 @@ while((file = readdir(idir)) != NULL){
 		if (input_stream.is_open() && inpath != indir+"/"+"." && inpath != indir+"/"+"..")
 		{
 				int file_size_int = filesystem::file_size(inpath);
-				//cout << file->d_name << " has a size of " << file_size_int << " ";
+
 				char *file_buffer = new char[file_size_int];
 
 				input_stream.seekg(0, ios::beg);
@@ -106,8 +109,6 @@ while((file = readdir(idir)) != NULL){
 
 				if (int(file_buffer[26]) == 1 && int(file_buffer[27]) == 0 && int(file_buffer[28]) == 24 && int(file_buffer[29]) == 0 && int(file_buffer[30]) == 0 &&
 				int(file_buffer[31]) == 0 && int(file_buffer[32]) == 0 && int(file_buffer[33]) == 0){
-					//cout << "and is a valid BMP file \n";
-
 					if(operation == "copy"){
 						ofstream output_stream(outpath, ios::binary);
 						start_store = chrono::steady_clock::now();
@@ -122,17 +123,25 @@ while((file = readdir(idir)) != NULL){
 					if(operation == "gauss"){
 						ofstream output_stream(outpath, ios::binary);
 						if (output_stream.is_open()){
-
+							start_gauss = chrono::steady_clock::now();
 							gauss(file_buffer, file_size_int);
-							store(file_buffer, file_size_int, output_stream);
 
+							store(file_buffer, file_size_int, output_stream);
+							end_store = chrono::steady_clock::now();
 						}
 						output_stream.close();
 					}
 					if(operation == "sobel"){
 						ofstream output_stream(outpath, ios::binary);
 						if (output_stream.is_open()){
+							start_gauss = chrono::steady_clock::now();
+							gauss(file_buffer, file_size_int);
 
+							start_sobel = chrono::steady_clock::now();
+							sobel(file_buffer, file_size_int);
+
+							store(file_buffer, file_size_int, output_stream);
+							end_store = chrono::steady_clock::now();
 						}
 						output_stream.close();
 					}
@@ -158,73 +167,85 @@ bool gauss (char *file_buffer, int file_size_int){
 	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
 	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 |(unsigned char)file_buffer[22]);
 
-	cout << "width: " << width << " height: " << height << "\n";
-
-
-
-	// file_buffer[first_byte] = char(0); //Blue
-	// file_buffer[first_byte + 1] = char(0); //Green
-	// file_buffer[first_byte + 2] = char(255); //Red
-
 	char * res = new char [file_size_int];
 
 	memcpy(res, file_buffer, file_size_int);
 
-	cout << first_byte << "\n";
-
-
-
 	for(int i = 0; i < height; i++){
 		for(int j = 0; j < width*3; j+=3){
-			//for(int p = 0; p <= 2; p++){
 				int x1 = 0, x2 = 0, x3 = 0;
 				for(int s = -2; s <= 2; s++){
 					for(int t = -2; t <= 2; t++){
-								 //if((i+s) >= 0 && (j+t*3) >= 0 /*&& (i+s) < height && (j+t*3) < width*3*/){
-										//cout << int((unsigned char) file_buffer[(i+s)*(width*3) + (j+t) + first_byte + p]);
-										//cout << "|" << int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte])) << "|";
-									 	x1 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte]));
-										x2 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte + 1]));
-										x3 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte + 2]));
-							 		//} else {
-										//x1 += 0, x2 += 0, x3 += 0;
-									//}
+						if(((i+s)*(width*3) + j + t*3 + first_byte) < height*width*3 && ((i+s)*(width*3) + j + t*3 + first_byte) >= first_byte){
+							x1 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte]));
+							x2 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte + 1]));
+							x3 += m[s+2][t+2] * int((unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte + 2]));
+						}
 					}
 				}
-				//res[i*width*3 + j + first_byte] = (unsigned char) 0;//x/w;
-				//res[i*width*3 + j + first_byte + 1] = (unsigned char) 0;//x/w;
-				//cout << x1/w;
+
 				res[i*width*3 + j + first_byte] = x1/w;
 				res[i*width*3 + j + first_byte + 1] = x2/w;
 				res[i*width*3 + j + first_byte + 2] = x3/w;
-			//}
 		}
 	}
 
-
-
-
-
-	int i = 0, j = 0;
-	// file_buffer[i*width*3 + j + first_byte];
-	// file_buffer[i*width*3 + j + first_byte + 1];
-	// file_buffer[i*width*3 + j + first_byte + 2]
-
-
-
-	cout << "Blue: " << int(file_buffer[i*width*3 + j + first_byte]) << " Green: " << int(file_buffer[i*width*3 + j + first_byte + 1]) << " Red: " << int((unsigned char) file_buffer[i*width*3 + j + first_byte + 2]);
-	cout << "Blue: " << int((unsigned char) res[i*width*3 + j + first_byte]) << " Green: " << int((unsigned char) res[i*width*3 + j + first_byte + 1]) << " Red: " << int((unsigned char) res[i*width*3 + j + first_byte + 2]);
-	//
-	// cout << " " << int(i*width*3 + j + first_byte) << "  " << first_byte;
 	memcpy(file_buffer, res, file_size_int);
 
+	end_gauss = chrono::steady_clock::now();
 	return true;
 }
 
-/*
-int sobel(){
 
-}*/
+bool sobel(char *file_buffer, int file_size_int){
+	int first_byte = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
+	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
+	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 |(unsigned char)file_buffer[22]);
+
+	char *res = new char[file_size_int];
+	memcpy(res, file_buffer, file_size_int);
+	char *resx = new char[file_size_int];
+	char *resy = new char[file_size_int];
+
+	for(int i = 0; i < height; i++){
+		for(int j = 0; j < width*3; j+=3){
+
+				int x1 = 0, x2 = 0, x3 = 0, y1 = 0, y2 = 0, y3 = 0;
+
+				for(int s = -1; s <= 1; s++){
+					for(int t = -1; t <= 1; t++){
+							x1 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte]));
+							x2 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte + 1]));
+							x3 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte + 2]));
+					}
+				}
+
+				resx[i*width*3 + j + first_byte] = x1/wsobel;
+				resx[i*width*3 + j + first_byte + 1] = x2/wsobel;
+				resx[i*width*3 + j + first_byte + 2] = x3/wsobel;
+
+				for(int s = -1; s <= 1; s++){
+					for(int t = -1; t <= 1; t++){
+							y1 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte]));
+							y2 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte + 1]));
+							y3 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte + 2]));
+					}
+				}
+
+				resy[i*width*3 + j + first_byte] = y1/wsobel;
+				resy[i*width*3 + j + first_byte + 1] = y2/wsobel;
+				resy[i*width*3 + j + first_byte + 2] = y3/wsobel;
+
+				file_buffer[i*width*3 + j + first_byte] = abs(resx[i*width*3 + j + first_byte]) + abs(resy[i*width*3 + j + first_byte]);
+				file_buffer[i*width*3 + j + first_byte + 1] = abs(resx[i*width*3 + j + first_byte + 1]) + abs(resy[i*width*3 + j + first_byte + 1]);
+				file_buffer[i*width*3 + j + first_byte + 2] = abs(resx[i*width*3 + j + first_byte + 2]) + abs(resy[i*width*3 + j + first_byte + 2]);
+
+		}
+	}
+
+	end_sobel = chrono::steady_clock::now();
+	return true;
+}
 
 void printTime(string operation, string inpath){
 	cout << "File: " << inpath <<" (time: " << chrono::duration_cast<chrono::microseconds>(end_total - start_load).count() << ")\n  Load time: " <<
