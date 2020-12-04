@@ -146,8 +146,8 @@ bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
 	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
 	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 | (unsigned char)file_buffer[22]);
 
-	file_buffer[0] = "B";
-	file_buffer[1] = "M";
+	file_buffer[0] = 'B';
+	file_buffer[1] = 'M';
 
 	//Total size
 	file_buffer[5] = (/*(binary)*/file_size_int >> 24) & 0xFF;
