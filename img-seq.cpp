@@ -14,7 +14,9 @@
 #include <cmath>
 //#include <math.h>
 /*test*/
+namespace fs = std::filesystem;
 using namespace std;
+
 
 //Variables for Gaussian Blur
 const int m[5][5] = {{1,4,7,4,1},{4,16,26,16,4},{7,26,41,26,7},{4,16,26,16,4},{1,4,7,4,1}};
@@ -79,9 +81,6 @@ int main(int argc, char *argv[]){
 		return 0;
 	}
 
-
-
-
 /*Opening directory and checking bmp files*/
 struct dirent *file;
 while((file = readdir(idir)) != NULL){
@@ -109,43 +108,31 @@ while((file = readdir(idir)) != NULL){
 
 				if (int(file_buffer[26]) == 1 && int(file_buffer[27]) == 0 && int(file_buffer[28]) == 24 && int(file_buffer[29]) == 0 && int(file_buffer[30]) == 0 &&
 				int(file_buffer[31]) == 0 && int(file_buffer[32]) == 0 && int(file_buffer[33]) == 0){
-					if(operation == "copy"){
-						ofstream output_stream(outpath, ios::binary);
-						start_store = chrono::steady_clock::now();
+					ofstream output_stream(outpath, ios::binary);
 
-						if (output_stream.is_open()){
-							store(file_buffer, file_size_int, output_stream);
-						}
+					if(output_stream.is_open()){
+						if(operation == "gauss"){
 
-						end_store = chrono::steady_clock::now();
-						output_stream.close();
-					}
-					if(operation == "gauss"){
-						ofstream output_stream(outpath, ios::binary);
-						if (output_stream.is_open()){
 							start_gauss = chrono::steady_clock::now();
 							gauss(file_buffer, file_size_int);
 
-							store(file_buffer, file_size_int, output_stream);
-							end_store = chrono::steady_clock::now();
 						}
-						output_stream.close();
-					}
-					if(operation == "sobel"){
-						ofstream output_stream(outpath, ios::binary);
-						if (output_stream.is_open()){
+						if(operation == "sobel"){
+
 							start_gauss = chrono::steady_clock::now();
 							gauss(file_buffer, file_size_int);
 
 							start_sobel = chrono::steady_clock::now();
 							sobel(file_buffer, file_size_int);
 
-							store(file_buffer, file_size_int, output_stream);
-							end_store = chrono::steady_clock::now();
 						}
+
+						start_store = chrono::steady_clock::now();
+
+						store(file_buffer, file_size_int, output_stream);
+
 						output_stream.close();
 					}
-
 					end_total = chrono::steady_clock::now();
 					printTime(operation, inpath);
 				}
@@ -156,7 +143,69 @@ while((file = readdir(idir)) != NULL){
 }
 
 bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
+	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
+	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 | (unsigned char)file_buffer[22]);
+
+	file_buffer[0] = "B";
+	file_buffer[1] = "M";
+
+	//Total size
+	file_buffer[5] = (/*(binary)*/file_size_int >> 24) & 0xFF;
+	file_buffer[4] = (/*(binary)*/file_size_int >> 16) & 0xFF;
+	file_buffer[3] = (/*(binary)*/file_size_int >> 8) & 0xFF;
+	file_buffer[2] = (/*(binary)*/file_size_int) & 0xFF;
+
+	//Sets to 0 everything that needs to be 0
+	for(int i = 0; i <= 3; i++){
+		file_buffer[i+6] = 0;
+		file_buffer[i+30] = 0;
+		file_buffer[i+46] = 0;
+		file_buffer[i+50] = 0;
+	}
+
+	//Value 54
+	file_buffer[13] = (/*(binary)*/54 >> 24) & 0xFF;
+	file_buffer[12] = (/*(binary)*/54 >> 16) & 0xFF;
+	file_buffer[11] = (/*(binary)*/54 >> 8) & 0xFF;
+	file_buffer[10] = (/*(binary)*/54) & 0xFF;
+
+	//Value 40
+	file_buffer[17] = (/*(binary)*/40 >> 24) & 0xFF;
+	file_buffer[16] = (/*(binary)*/40 >> 16) & 0xFF;
+	file_buffer[15] = (/*(binary)*/40 >> 8) & 0xFF;
+	file_buffer[14] = (/*(binary)*/40) & 0xFF;
+
+	//Numero de píxeles de ancho aqui
+	//Numero de píxeles de alto aqui
+
+	//Value 1
+	file_buffer[27] = (/*(binary)*/1 >> 8) & 0xFF;
+	file_buffer[26] = (/*(binary)*/1) & 0xFF;
+
+	//Value 24
+	file_buffer[27] = (/*(binary)*/24 >> 8) & 0xFF;
+	file_buffer[26] = (/*(binary)*/24) & 0xFF;
+
+	//Size of the image
+	file_buffer[37] = (/*(binary)*/ width*height*3 >> 24) & 0xFF;
+	file_buffer[36] = (/*(binary)*/ width*height*3 >> 16) & 0xFF;
+	file_buffer[35] = (/*(binary)*/ width*height*3 >> 8) & 0xFF;
+	file_buffer[34] = (/*(binary)*/ width*height*3) & 0xFF;
+
+	//Value 2835
+	file_buffer[41] = (/*(binary)*/ 2835 >> 24) & 0xFF;
+	file_buffer[40] = (/*(binary)*/ 2835 >> 16) & 0xFF;
+	file_buffer[39] = (/*(binary)*/ 2835 >> 8) & 0xFF;
+	file_buffer[38] = (/*(binary)*/ 2835) & 0xFF;
+
+	//Value 2835
+	file_buffer[45] = (/*(binary)*/ 2835 >> 24) & 0xFF;
+	file_buffer[44] = (/*(binary)*/ 2835 >> 16) & 0xFF;
+	file_buffer[43] = (/*(binary)*/ 2835 >> 8) & 0xFF;
+	file_buffer[42] = (/*(binary)*/ 2835) & 0xFF;
+
 	if(output_stream.write(file_buffer, file_size_int)){
+		end_store = chrono::steady_clock::now();
 		return true;
 	}
 	return false;
@@ -246,6 +295,7 @@ bool sobel(char *file_buffer, int file_size_int){
 	end_sobel = chrono::steady_clock::now();
 	return true;
 }
+
 
 void printTime(string operation, string inpath){
 	cout << "File: " << inpath <<" (time: " << chrono::duration_cast<chrono::microseconds>(end_total - start_load).count() << ")\n  Load time: " <<
