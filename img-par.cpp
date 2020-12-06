@@ -93,9 +93,11 @@ int main(int argc, char *argv[]){
 
 	string inpath;
 	string outpath;
+	int file_size_int = 0;
+	char *file_buffer;
 
 	omp_set_num_threads(nthread);
-	#pragma omp parallel private(start_load, end_load, start_store, end_store, start_gauss, end_gauss, start_sobel, end_sobel, end_total)
+	#pragma omp parallel private(start_load, end_load, start_store, end_store, start_gauss, end_gauss, start_sobel, end_sobel, end_total, inpath, outpath, file_buffer)
 		//for(struct dirent *file = readdir(idir); file != NULL; file = readdir(idir)){
 		while((file = readdir(idir)) != NULL){
 		start_load = omp_get_wtime();
@@ -105,9 +107,9 @@ int main(int argc, char *argv[]){
 
 		if (input_stream.is_open() && inpath != indir+"/"+"." && inpath != indir+"/"+"..")
 		{
-				int file_size_int = filesystem::file_size(inpath);
+				file_size_int = filesystem::file_size(inpath);
 
-				char *file_buffer = new char[file_size_int];
+				file_buffer = new char[file_size_int];
 
 				input_stream.seekg(0, ios::beg);
 				int i = 0;
