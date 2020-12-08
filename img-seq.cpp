@@ -82,19 +82,23 @@ int main(int argc, char *argv[]){
 		return 0;
 	}
 
-/*Opening directory and checking bmp files*/
-struct dirent *file;
-while((file = readdir(idir)) != NULL){
-		start_load = chrono::steady_clock::now();
 
+struct dirent *file;
+//This loop reads the files in the input directory one by one and performs the necessary operation
+while((file = readdir(idir)) != NULL){
+		//The loading of the file starts here
+		start_load = chrono::steady_clock::now();
 
 		string inpath = indir+"/"+file->d_name;
 		string outpath = outdir+"/"+file->d_name;
 
+		//Opening the input stream of the corresponding file
 		ifstream input_stream(inpath, ios::binary);
 
+		//Checking that the input stream is open and it corresponds to a file
 		if (input_stream.is_open() && inpath != indir+"/"+"." && inpath != indir+"/"+"..")
 		{
+				//Getting the size of the file
 				int file_size_int = filesystem::file_size(inpath);
 
 
