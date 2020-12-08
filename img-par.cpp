@@ -18,17 +18,6 @@ using namespace std;
 using namespace chrono;
 using clk = high_resolution_clock;
 
-// //Class definitions
-// class file{
-//   public:
-//     string inpath;
-//     string outpath;
-//     int file_size_int = 0;
-//     char *file_buffer;
-//     int width = 0;
-//     int height = 0;
-//     int first_byte_old = 0;
-// };
 
 //General variables
 const int nthread = 8;
@@ -53,30 +42,33 @@ void printTime(string operation, string inpath, int load_time, int gauss_time, i
 
 int main(int argc, char *argv[]){
 
-  if(argc != 4){
+	//Checking the number of arguments is correct
+	if(argc != 4){
 		cout << "Wrong format: \n image-seq operation in_path out_path \n operation: copy, gauss, sobel \n";
 		return 0;
 	}
 
-  string operation = argv[1];
+	//Storing the arguments
+	string operation = argv[1];
 	string indir = argv[2];
 	string outdir = argv[3];
 
-  if(operation != "copy" && operation != "gauss" && operation != "sobel"){
+	//Checking that the first argument is a valid operation
+	if(operation != "copy" && operation != "gauss" && operation != "sobel"){
 		cout << "Unexpected operation: " << argv[1] << "\n image-seq operation in_path out_path \n operation: copy, gauss, sobel \n";
 		return 0;
 	}
 
-  const char *ind = indir.c_str();
+	//Opening the input and output directories
+	const char *ind = indir.c_str();
 	DIR *idir = opendir(ind);
-
 	const char *outd = outdir.c_str();
 	DIR *odir = opendir(outd);
 
 	cout << "Input path:" << indir << "\n";
 	cout << "Output path:" << outdir << "\n";
 
-  if (!idir){
+	if (!idir){
 		/* Input directory does not exist */
 		cout << "Cannot open directory [" << indir << "] \n image-seq operation in_path out_path \n operation: copy, gauss, sobel\n";
 		return 0;
@@ -86,8 +78,9 @@ int main(int argc, char *argv[]){
 		return 0;
 	}
 
+	//setting the number of threads
   omp_set_num_threads(nthread);
-
+	//Dividing the program in different threads for each file
   #pragma omp parallel
   {
     struct dirent *file;
@@ -96,88 +89,84 @@ int main(int argc, char *argv[]){
     while((file = readdir(idir)) != NULL){
         string inpath = indir+"/"+file->d_name;
 		    string outpath = outdir+"/"+file->d_name;
+				//Opening the input stream of the corresponding file
         ifstream input_stream(inpath, ios::binary);
+				//Checking that the input stream is open and it corresponds to a file
         if (input_stream.is_open() && inpath != indir+"/"+"." && inpath != indir+"/"+"..") {
+					//Getting the size of the file
           int file_size_int = filesystem::file_size(inpath);
+
+					//file_buffer is an array that stores all the bytes in the opened file
           char *file_buffer = new char[file_size_int];
           input_stream.seekg(0, ios::beg);
           int i = 0;
           while (input_stream.get(file_buffer[i])){
             i++;
           }
+
+					//Checking that the file is valid in accordance to the project statement
           if (int(file_buffer[26]) == 1 && int(file_buffer[27]) == 0 && int(file_buffer[28]) == 24 && int(file_buffer[29]) == 0 && int(file_buffer[30]) == 0 &&
   				int(file_buffer[31]) == 0 && int(file_buffer[32]) == 0 && int(file_buffer[33]) == 0){
-            // #pragma omp critical
-            // cout << "ID: " << int(id) << " file: " << file -> d_name << " size: " << file_size_int << "\n";
+						//Opening the output stream
             ofstream output_stream(outpath, ios::binary);
             if(output_stream.is_open()){
               load_stop = clk::now();
-              if(operation == "gauss"){
+							//If the operation is not copy, the gaussian blur operation will be performed
+              if(operation != "copy"){
                 gauss_start = clk::now();
                 file_buffer = gauss(file_buffer, file_size_int);
                 gauss_stop = clk::now();
+								//If the operation is equal to sobel, the sobel operator will be used
+								if(operation == "sobel"){
+									sobel_start = clk::now();
+									file_buffer = sobel(file_buffer, file_size_int);
+									sobel_stop = clk::now();
+								}
               }
-              if(operation == "sobel"){
-                gauss_start = clk::now();
-                file_buffer = gauss(file_buffer, file_size_int);
-                gauss_stop = clk::now();
-                sobel_start = clk::now();
-                file_buffer = sobel(file_buffer, file_size_int);
-                sobel_stop = clk::now();
-              }
+
               store_start = clk::now();
               store(file_buffer, file_size_int, output_stream);
               store_stop = clk::now();
+
+							//Calculating the times
               auto load_time = duration_cast<microseconds>(load_stop - load_start);
               auto gauss_time = duration_cast<microseconds>(gauss_stop - gauss_start);
               auto sobel_time = duration_cast<microseconds>(sobel_stop - sobel_start);
               auto store_time = duration_cast<microseconds>(store_stop - store_start);
               printTime(operation, inpath, load_time.count(), gauss_time.count(), sobel_time.count(), store_time.count());
-              input_stream.close();
+							//Closing the output stream
+							output_stream.close();
             }
           }
+					//Closing the input stream
+					input_stream.close();
         }
     }
-
-    // #pragma omp critical
-    // {
-    //   if (file != NULL){
-    //     cout << "ID: " << int(id) << " file: " << file -> d_name << "\n";
-    //   }
-    // }
   }
+	return 0;
 }
 
 bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
-  int first_byte_old = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
+	//Byte where the values of the pixels start in the original file
+	int first_byte_old = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
+	//Byte where the values of the pixels start in the new file
 	int first_byte_new = 54;
+	//Size of the new file
 	int file_size_int_new = file_size_int-abs(first_byte_old-first_byte_new);
-	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
-	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 |(unsigned char)file_buffer[22]);
-	int padding = 0;
-	if((width*3)%4 !=0){
-		padding = 4-(width*3)%4;
-	}
-  char * res = new char [file_size_int_new];
-  #pragma omp critical
-  {
-    memcpy(&res[0], &file_buffer[0], first_byte_new);
-  }
-  if(padding != 0){
-    for(int i = 0; i < height; i++){
-      #pragma omp critical
-      {
-        memcpy(&res[first_byte_new + i*width*3 + i*padding], &file_buffer[first_byte_old + i*width*3 + i*3], width*3+padding);
-      }
-    }
-  } else {
-    #pragma omp critical
-    {
-      memcpy(&res[first_byte_new], &file_buffer[first_byte_old], file_size_int-first_byte_old);
-    }
-  }
 
-  res[0] = 'B';
+	char * res = new char [file_size_int_new];
+
+	//Copying the header of the file
+  #pragma omp critical
+  memcpy(&res[0], &file_buffer[0], first_byte_new);
+
+	//The bytes for the image itself will be copied starting after 54 bytes
+  #pragma omp critical
+  memcpy(&res[first_byte_new], &file_buffer[first_byte_old], file_size_int-first_byte_old);
+
+	//Changing the header to the required values:
+
+	res[0] = 'B';
 	res[1] = 'M';
 
 	//Total size
@@ -186,7 +175,7 @@ bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
 	res[3] = (file_size_int_new >> 8);
 	res[2] = (file_size_int_new >> 0);
 
-	//Sets to 0 everything that needs to be 0
+	//Value 0
   #pragma omp parallel for
 	for(int i = 0; i <= 3; i++){
 		res[i+6] = 0;
@@ -194,8 +183,6 @@ bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
 		res[i+46] = 0;
 		res[i+50] = 0;
 	}
-
-	//6, 7, 8, 9
 
 	//Value 54
 	res[13] = char(first_byte_new >> 24);
@@ -209,9 +196,6 @@ bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
 	res[15] = (40 >> 8);
 	res[14] = (40 >> 0);
 
-	//Numero de píxeles de ancho aqui 18, 19, 20, 21
-	//Numero de píxeles de alto aqui 22, 23, 24, 25
-
 	//Value 1
 	res[26] = (1);
 	res[27] = (1 >> 8);
@@ -220,10 +204,8 @@ bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
 	res[28] = (24);
 	res[29] = (24 >> 8);
 
-	//30, 31, 32, 33
-
-	int img_size = file_size_int_new - 54;
 	//Size of the image
+	int img_size = file_size_int_new - 54;
 	res[34] = (img_size);
 	res[35] = (img_size >> 8);
 	res[36] = (img_size >> 16);
@@ -241,77 +223,94 @@ bool store (char *file_buffer, int file_size_int, ofstream& output_stream){
 	res[44] = char(2835 >> 16);
 	res[45] = char(2835 >> 24);
 
-	//46, 47, 48, 49
-	//50, 51, 52, 53
 
-  if(output_stream.write(res, file_size_int_new)){
+	//Writing the file in the input stream
+	if(output_stream.write(res, file_size_int_new)){
 		return true;
 	}
 	return false;
 }
 
+//Function to perform the gaussian blur operation on an image stored in the file_buffer
 char *gauss (char *file_buffer, int file_size_int){
-  int first_byte_old = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
-  int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
-  int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 |(unsigned char)file_buffer[22]);
-  int padding = 0;
-  if((width*3)%4 !=0){
+	//Byte where the values of the pixels start in the original file
+	int first_byte_old = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
+	//Width and height of the image in pixels
+	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
+	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 |(unsigned char)file_buffer[22]);
+
+	//The value of the number of bytes that need to be padded in the file so that each line of pixels starts on a word boundary
+	int padding = 0;
+	if((width*3)%4 !=0){
 		padding = 4-(width*3)%4;
 	}
+
   char *res = new char [file_size_int];
-  #pragma omp critical
+	//This section will be locked, since two threads should not write in memory at the same time
+	#pragma omp critical
   {
     memcpy(res, file_buffer, file_size_int);
   }
+	//The iterations of these loops will also be paralelized
   #pragma omp parallel for collapse(2)
-  for(int i = 0; i < height; i++){
-    for(int j = 0; j < width*3; j+=3){
-      int x1 = 0, x2 = 0, x3 = 0;
-      for(int s = -2; s <= 2; s++){
-        for(int t = -2; t <= 2; t++){
-          if(padding == 0){
-            if(((i+s)*(width*3) + j + t*3) < height*width*3 && ((i+s)*(width*3) + j + t*3 + first_byte_old) >= first_byte_old && (j + t*3) < width*3 && (j + t*3) >= 0){
-							x1 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte_old]);
-							x2 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte_old + 1]);
-							x3 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3) + j + t*3 + first_byte_old + 2]);
-						}
-          } else {
-            if(((i+s)*(width*3+padding) + j + t*3) < height*(width*3+padding*height) && ((i+s)*(width*3+padding) + j + t*3 + first_byte_old) >= first_byte_old && (j + t*3) < (width*3)
-						&& (j + t*3) >= 0){
-							x1 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3+padding) + j + t*3 + first_byte_old]);
-							x2 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 1]);
-							x3 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 2]);
-						}
-          }
-        }
-      }
-      if(padding == 0){
-        res[i*width*3 + j + first_byte_old] = x1/w;
+	for(int i = 0; i < height; i++){
+		for(int j = 0; j < width*3; j+=3){
+			int x1 = 0, x2 = 0, x3 = 0;
+			for(int s = -2; s <= 2; s++){
+				for(int t = -2; t <= 2; t++){
+					//Checking that we do not get out of the boundaries of the image
+					if(((i+s)*(width*3+padding) + j + t*3) < height*(width*3+padding*height) && ((i+s)*(width*3+padding) + j + t*3 + first_byte_old) >= first_byte_old && (j + t*3) < (width*3)
+					&& (j + t*3) >= 0){
+						//Each pixel is composed of three bytes, so we use three variables
+						x1 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3+padding) + j + t*3 + first_byte_old]);
+						x2 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 1]);
+						x3 += m[s+2][t+2] * (unsigned char)(file_buffer[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 2]);
+					}
+				}
+			}
+			//Storing the new values
+			if(padding == 0){
+				res[i*width*3 + j + first_byte_old] = x1/w;
 				res[i*width*3 + j + first_byte_old + 1] = x2/w;
 				res[i*width*3 + j + first_byte_old + 2] = x3/w;
-      } else {
-        if(j+i*padding == 0 && i > 0){
-          //res[i*width*3 + j + first_byte_old + i*3] = 0;
-					//res[i*width*3 + j + first_byte_old + 1 + i*3] = 0;
-					//res[i*width*3 + j + first_byte_old + 2 + i*3] = 0;
-        } else {
-          if((i*width*3 + j + first_byte_old + 2 + i*3) < file_size_int){
-            res[i*width*3 + j + first_byte_old + i*3] = x1/w;
-  					res[i*width*3 + j + first_byte_old + 1 + i*3] = x2/w;
-  					res[i*width*3 + j + first_byte_old + 2 + i*3] = x3/w;
-          }
-        }
-      }
-    }
-  }
+			} else {
+				if((i*width*3 + j + first_byte_old + 2 + i*3) < file_size_int){
+					res[i*width*3 + j + first_byte_old + i*3] = x1/w;
+					res[i*width*3 + j + first_byte_old + 1 + i*3] = x2/w;
+					res[i*width*3 + j + first_byte_old + 2 + i*3] = x3/w;
+				}
+			}
+		}
+	}
+
+
+	if(padding != 0){
+		for(int i = 0; i < height; i++){
+			//If there is padding, each line will be copied one by one with the padding taken into account
+			#pragma omp critical
+			memcpy(&file_buffer[first_byte_old + i*width*3 + i*padding], &res[first_byte_old + i*width*3 + i*3], width*3+padding);
+		}
+	}
+
   return res;
 }
 
+//Function to perform the sobel operation on an image stored in the file_buffer
 char *sobel (char *file_buffer, int file_size_int){
-  int first_byte_old = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
+	//Byte where the values of the pixels start in the original file
+	int first_byte_old = int((unsigned char)file_buffer[13] << 24 |  (unsigned char)file_buffer[12] << 16 |  (unsigned char)file_buffer[11] << 8 |(unsigned char)file_buffer[10]);
+	//Width and height of the image in pixels
 	int width = int((unsigned char)file_buffer[21] << 24  |  (unsigned char)file_buffer[20] << 16 |  (unsigned char)file_buffer[19] << 8 | (unsigned char)file_buffer[18]);
 	int height = int((unsigned char)file_buffer[25] << 24 |  (unsigned char)file_buffer[24] << 16 |  (unsigned char)file_buffer[23] << 8 |(unsigned char)file_buffer[22]);
+
+	//The value of the number of bytes that need to be padded in the file so that each line of pixels starts on a word boundary
+	int padding = 0;
+	if((width*3)%4 !=0){
+		padding = 4-(width*3)%4;
+	}
+
   char *res = new char[file_size_int];
+	//This section will be locked, since two threads should not write in memory at the same time
   #pragma omp critical
   {
     memcpy(res, file_buffer, file_size_int);
@@ -319,49 +318,80 @@ char *sobel (char *file_buffer, int file_size_int){
   char *resx = new char[file_size_int];
 	char *resy = new char[file_size_int];
 
-  #pragma omp parallel for collapse(2)
-  for(int i = 0; i < height; i++){
-    for(int j = 0; j < width*3; j+=3){
-      int x1 = 0, x2 = 0, x3 = 0, y1 = 0, y2 = 0, y3 = 0;
-      for(int s = -1; s <= 1; s++){
-        for(int t = -1; t <= 1; t++){
-          if(((i+s)*(width*3) + j + t*3) < height*width*3 && ((i+s)*(width*3) + j + t*3 + first_byte_old) >= first_byte_old && (j + t*3) < width*3 && (j + t*3) >= 0){
-            x1 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte_old]));
-            x2 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte_old + 1]));
-            x3 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte_old + 2]));
-            y1 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte_old]));
-            y2 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte_old + 1]));
-            y3 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3) + j + t*3 + first_byte_old + 2]));
-          }
-        }
-      }
-      resx[i*width*3 + j + first_byte_old] = x1/wsobel;
-			resx[i*width*3 + j + first_byte_old + 1] = x2/wsobel;
-			resx[i*width*3 + j + first_byte_old + 2] = x3/wsobel;
+	//The iterations of these loops will also be paralelized
+	#pragma omp parallel for collapse(2)
+	for(int i = 0; i < height; i++){
+		for(int j = 0; j < width*3; j+=3){
 
-			resy[i*width*3 + j + first_byte_old] = y1/wsobel;
-			resy[i*width*3 + j + first_byte_old + 1] = y2/wsobel;
-			resy[i*width*3 + j + first_byte_old + 2] = y3/wsobel;
+				int x1 = 0, x2 = 0, x3 = 0, y1 = 0, y2 = 0, y3 = 0;
 
-			file_buffer[i*width*3 + j + first_byte_old] = abs(resx[i*width*3 + j + first_byte_old]) + abs(resy[i*width*3 + j + first_byte_old]);
-			file_buffer[i*width*3 + j + first_byte_old + 1] = abs(resx[i*width*3 + j + first_byte_old + 1]) + abs(resy[i*width*3 + j + first_byte_old + 1]);
-			file_buffer[i*width*3 + j + first_byte_old + 2] = abs(resx[i*width*3 + j + first_byte_old + 2]) + abs(resy[i*width*3 + j + first_byte_old + 2]);
-    }
-  }
-  return file_buffer;
+				for(int s = -1; s <= 1; s++){
+					for(int t = -1; t <= 1; t++){
+						//Checking that we do not get out of the boundaries of the image
+						if(((i+s)*(width*3+padding) + j + t*3) < height*(width*3+padding*height) && ((i+s)*(width*3+padding) + j + t*3 + first_byte_old) >= first_byte_old && (j + t*3) < (width*3)
+						&& (j + t*3) >= 0){
+
+							x1 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3+padding) + j + t*3 + first_byte_old]));
+							x2 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 1]));
+							x3 += mx[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 2]));
+							y1 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3+padding) + j + t*3 + first_byte_old]));
+							y2 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 1]));
+							y3 += my[s+1][t+1] * int((unsigned char)(res[(i+s)*(width*3+padding) + j + t*3 + first_byte_old + 2]));
+
+						}
+					}
+				}
+				if(padding == 0){
+					resx[i*width*3 + j + first_byte_old] = x1/wsobel;
+					resx[i*width*3 + j + first_byte_old + 1] = x2/wsobel;
+					resx[i*width*3 + j + first_byte_old + 2] = x3/wsobel;
+
+					resy[i*width*3 + j + first_byte_old] = y1/wsobel;
+					resy[i*width*3 + j + first_byte_old + 1] = y2/wsobel;
+					resy[i*width*3 + j + first_byte_old + 2] = y3/wsobel;
+
+					//Storing the new values obtained with the operation
+					file_buffer[i*width*3 + j + first_byte_old] = abs(resx[i*width*3 + j + first_byte_old]) + abs(resy[i*width*3 + j + first_byte_old]);
+					file_buffer[i*width*3 + j + first_byte_old + 1] = abs(resx[i*width*3 + j + first_byte_old + 1]) + abs(resy[i*width*3 + j + first_byte_old + 1]);
+					file_buffer[i*width*3 + j + first_byte_old + 2] = abs(resx[i*width*3 + j + first_byte_old + 2]) + abs(resy[i*width*3 + j + first_byte_old + 2]);
+				} else {
+					if((i*width*3 + j + first_byte_old + 2 + i*padding) < file_size_int){
+						resx[i*width*3 + j + first_byte_old + i*padding] = x1/wsobel;
+						resx[i*width*3 + j + first_byte_old + 1 + i*padding] = x2/wsobel;
+						resx[i*width*3 + j + first_byte_old + 2 + i*padding] = x3/wsobel;
+
+						resy[i*width*3 + j + first_byte_old + i*padding] = y1/wsobel;
+						resy[i*width*3 + j + first_byte_old + 1 + i*padding] = y2/wsobel;
+						resy[i*width*3 + j + first_byte_old + 2 + i*padding] = y3/wsobel;
+
+						//Storing the new values obtained with the operation
+						file_buffer[i*width*3 + j + first_byte_old + i*padding] = abs(resx[i*width*3 + j + first_byte_old + i*padding]) + abs(resy[i*width*3 + j + first_byte_old + i*padding]);
+						file_buffer[i*width*3 + j + first_byte_old + 1 + i*padding] = abs(resx[i*width*3 + j + first_byte_old + 1 + i*padding]) + abs(resy[i*width*3 + j + first_byte_old + 1 + i*padding]);
+						file_buffer[i*width*3 + j + first_byte_old + 2 + i*padding] = abs(resx[i*width*3 + j + first_byte_old + 2 + i*padding]) + abs(resy[i*width*3 + j + first_byte_old + 2 + i*padding]);
+					}
+				}
+		}
+	}
+
+	return file_buffer;
 }
 
+//This function prints the time that a file took to perform the different operations of the program
 void printTime(string operation, string inpath, int load_time, int gauss_time, int sobel_time, int store_time){
   int total_time = load_time + gauss_time + sobel_time + store_time;
+	//This section will be locked, since a thread should not print its information while another one is still printing
   #pragma omp critical
   {
+		//First it will print the total time for all the operations and the loading time
     cout << "File: " << inpath <<" (time: " << total_time  << ")\n  Load time: " << load_time << "\n";
+		//If the operation is not copy it will print the gauss time, and if it is sobel it will print the sobel time as well
     if(operation != "copy"){
       cout << "  Gauss time: " << gauss_time << "\n";
   		if(operation == "sobel"){
   			cout << "  Sobel time: " << sobel_time << "\n";
   		}
     }
-    cout << "  Store time: " << store_time << "\n";
+		//Finally it will print the time to store the file
+		cout << "  Store time: " << store_time << "\n";
   }
 }
